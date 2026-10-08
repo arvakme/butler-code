@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "title": "待填写：本次交付",
+  "summary": "尚未执行验证。",
+  "project": "example-project",
+  "task": "example-task",
+  "round": 1,
+  "created_at": "2026-09-21T10:00:00+08:00",
+  "revision": "待核对：commit、工作区差异与实际运行版本",
+  "environment": "待填写环境与角色",
+  "entry": "待填写真实入口",
+  "process": ["已建立验收项，尚未执行。"],
+  "cases": [
+    {
+      "id": "main-journey",
+      "title": "用户可以完成主要流程",
+      "required": true,
+      "method": "待填写入口和实际操作步骤",
+      "expected": "待填写可观察结果",
+      "status": "pending",
+      "observation": "尚未操作。",
+      "evidence_required": ["image"],
+      "evidence": []
+    }
+  ],
+  "checks": [],
+  "review": "尚未审阅；不声称独立审查。",
+  "limitations": ["这是待填写的数据示例，不是已通过的验收。"],
+  "cleanup": {"complete": false, "notes": "尚未收尾。"}
+}

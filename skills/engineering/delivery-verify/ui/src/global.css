@@ -1,0 +1,127 @@
+/* Arvak purple design language, after ~/Devs/arvak-blog-purple/app/globals.css. */
+@font-face {
+  font-family: 'Geist';
+  src: url('../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --brand: #7048b4;
+  --brand-soft: #bea5f5;
+  --brand-ink: #4b2f80;
+  --brand-tint: #efe7fc;
+  --brand-wash: #f7f3fe;
+  --on-brand: #ffffff;
+  --glow-strong: rgb(112 72 180 / 0.12);
+  --glow-soft: rgb(190 165 245 / 0.2);
+  --glow-top: rgb(190 165 245 / 0.1);
+  --field-opacity: 0.2;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --glide: cubic-bezier(0.22, 1, 0.36, 1);
+  --selection: rgb(112 72 180 / 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand: #bea5f5;
+    --brand-soft: #7a5cbf;
+    --brand-ink: #dccbff;
+    --brand-tint: #2b2340;
+    --brand-wash: #1c1826;
+    --on-brand: #1d1b22;
+    --glow-strong: rgb(112 72 180 / 0.16);
+    --glow-soft: rgb(112 72 180 / 0.12);
+    --glow-top: rgb(190 165 245 / 0.05);
+    --field-opacity: 0.16;
+    --selection: rgb(190 165 245 / 0.28);
+  }
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* Four-point sparkles twinkle on the compositor (HTML box, not the SVG). */
+@keyframes twinkle {
+  0%, 100% { transform: scale(0.55) rotate(0deg); opacity: 0.35; }
+  45% { transform: scale(1) rotate(45deg); opacity: 1; }
+  60% { transform: scale(0.9) rotate(60deg); opacity: 0.9; }
+}
+
+.spark {
+  display: inline-block;
+  transform-origin: 50% 50%;
+  animation: twinkle 3.2s var(--glide) infinite;
+}
+
+/* Link underline: a lavender hairline that shimmers purple on hover. */
+@keyframes shimmer {
+  to { background-position: -200% 100%; }
+}
+
+.lk {
+  color: inherit;
+  text-decoration: none;
+  background-image: linear-gradient(90deg, var(--brand-soft), var(--brand-soft));
+  background-size: 200% 1.5px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 2px;
+  transition: color 0.2s;
+}
+
+.lk:hover,
+.lk:focus-visible {
+  color: var(--brand);
+  background-image: linear-gradient(90deg, var(--brand) 0%, var(--brand-soft) 25%, var(--brand) 50%,
+    var(--brand-soft) 75%, var(--brand) 100%);
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Jelly press on every button-like control. */
+.jelly {
+  transition: transform 0.5s var(--spring), background-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.jelly:active {
+  transform: scale(0.94);
+}
+
+/* Primary action: purple gradient that sweeps on hover. */
+.brand-btn.brand-btn {
+  border: 0;
+  color: var(--on-brand);
+  background-image: linear-gradient(110deg, var(--brand-ink) 0%, var(--brand) 40%, var(--brand-soft) 50%,
+    var(--brand) 60%, var(--brand-ink) 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  box-shadow: 0 4px 14px -6px var(--brand);
+  transition: background-position 0.9s var(--glide), transform 0.5s var(--spring), box-shadow 0.2s;
+}
+
+.brand-btn.brand-btn:hover {
+  color: var(--on-brand);
+  background-position: 0 0;
+  box-shadow: 0 6px 18px -6px var(--brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spark,
+  .lk:hover,
+  .lk:focus-visible {
+    animation: none;
+  }
+
+  .jelly,
+  .brand-btn.brand-btn {
+    transition: none;
+  }
+}

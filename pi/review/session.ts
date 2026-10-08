@@ -1,0 +1,110 @@
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { ThinkingLevelValue } from "../config.js";
+import type { InProcessSessionPool } from "../master/spawn.js";
+import type { PromptLayers } from "./prompt.js";
+import { textOf } from "../format.js";
+
+export type ReviewSessionResult =
+	| { kind: "output"; text: string }
+	| { kind: "empty" }
+	| { kind: "timeout" }
+	| { kind: "aborted" }
+	| { kind: "error"; message: string };
+
+export interface ReviewSessionOptions {
+	pool: InProcessSessionPool;
+	role: "reviewer" | "advisor";
+	model: string;
+	thinking: ThinkingLevelValue;
+	tools: string[];
+	prompt: PromptLayers;
+	cwd: string;
+	timeoutMs: number;
+	signal?: AbortSignal;
+}
+
+export type ReviewSessionRunner = (
+	options: Omit<ReviewSessionOptions, "pool">,
+) => Promise<ReviewSessionResult>;
+
+export function createReviewSessionRunner(pool: InProcessSessionPool): ReviewSessionRunner {
+	return (options) => runReviewSession({ ...options, pool });
+}
+
+async function runReviewSession(options: ReviewSessionOptions): Promise<ReviewSessionResult> {
+	if (options.signal?.aborted) return { kind: "aborted" };
+	let spawned: Awaited<ReturnType<InProcessSessionPool["spawn"]>>;
+	try {
+		spawned = await options.pool.spawn({
+			cwd: options.cwd,
+			role: options.role,
+			model: await options.pool.resolveModel(options.model),
+			thinking: options.thinking,
+			tools: [...new Set(options.tools)].filter((tool) => tool !== "write" && tool !== "edit"),
+			systemPrompt: { mode: "replace", text: clean(options.prompt.system) },
+			contextFiles: false,
+			persistence: { type: "memory" },
+			isolated: true,
+		});
+	} catch (error) {
+		return options.signal?.aborted
+			? { kind: "aborted" }
+			: { kind: "error", message: errorText(error) };
+	}
+	if (options.signal?.aborted) {
+		await spawned.dispose();
+		return { kind: "aborted" };
+	}
+
+	let finalText: string | undefined;
+	let finalError: string | undefined;
+	const unsubscribe = spawned.session.subscribe((event) => {
+		const assistant = assistantMessage(event);
+		if (assistant) {
+			finalText = textOf(assistant.content);
+			finalError = assistant.stopReason === "error"
+				? assistant.errorMessage || "model error"
+				: undefined;
+		}
+	});
+	let interrupted: "aborted" | "timeout" | undefined;
+	let wake!: () => void;
+	const interruption = new Promise<void>((resolve) => { wake = resolve; });
+	const onAbort = () => { interrupted = "aborted"; wake(); };
+	options.signal?.addEventListener("abort", onAbort, { once: true });
+	const timeout = setTimeout(() => { interrupted = "timeout"; wake(); }, options.timeoutMs);
+	try {
+		const run = spawned.prompt(clean(options.prompt.user)).catch((error) => {
+			finalError = errorText(error);
+		});
+		await Promise.race([run, interruption]);
+		// 中断只靠 finally 的 dispose 收尾：pi 的 abort 在模型流卡死时永不返回，等它会拖住整个关闭链。
+		if (interrupted) return { kind: interrupted };
+		if (finalError) return { kind: "error", message: finalError };
+		return finalText?.trim() ? { kind: "output", text: finalText } : { kind: "empty" };
+	} finally {
+		clearTimeout(timeout);
+		options.signal?.removeEventListener("abort", onAbort);
+		unsubscribe();
+		await spawned.dispose();
+	}
+}
+
+function assistantMessage(event: AgentSessionEvent): {
+	role?: string;
+	content?: unknown;
+	stopReason?: string;
+	errorMessage?: string;
+} | undefined {
+	if (event.type === "message_end") return event.message.role === "assistant" ? event.message : undefined;
+	if (event.type !== "agent_end") return undefined;
+	return [...event.messages].reverse().find((message) => message.role === "assistant");
+}
+
+function clean(text: string): string {
+	return text.replaceAll("\0", "");
+}
+
+function errorText(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}

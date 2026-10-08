@@ -1,0 +1,28 @@
+#!/bin/sh
+# herdr-attach [--session NAME]: attach to herdr, keeping its background server independent of the terminal window that opens it.
+# Without this, the first `herdr` in a Ghostty window starts the server as that window's child, and closing the window (or
+# quitting Ghostty) kills the server and every agent inside it. Here the server is started detached first (`herdr server`), and
+# the window is only a client. Nothing is installed as a service: after a reboot the first call starts the server again.
+# Only the attach forms are wrapped (no arguments, or --session NAME); every other subcommand, and any use from inside a herdr
+# pane, goes straight to the real binary. The `herdr` function of every interactive shell calls this. 2026-10-06.
+bin="$(command -v herdr)" || { echo "herdr: not found (mise use -g herdr)" >&2; exit 127; }
+[ "$HERDR_ENV" = 1 ] && exec "$bin" "$@"
+# A new session without a controlling terminal: closing the window must not hang up the server (a plain `nohup ... &` is not enough).
+detach() { nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' "$@" >/dev/null 2>&1 & }
+if [ "$#" -eq 2 ] && [ "$1" = --session ]; then
+  session="$2"
+  running() { "$bin" --session "$session" status 2>/dev/null | grep -q "status: running"; }
+  start() { detach "$bin" --session "$session" server; }
+  attach() { exec "$bin" --session "$session"; }
+elif [ "$#" -eq 0 ]; then
+  running() { "$bin" status 2>/dev/null | grep -q "status: running"; }
+  start() { detach "$bin" server; }
+  attach() { exec "$bin"; }
+else
+  exec "$bin" "$@"
+fi
+if ! running; then
+  start
+  i=0; while [ "$i" -lt 30 ] && ! running; do sleep 0.2; i=$((i + 1)); done
+fi
+attach

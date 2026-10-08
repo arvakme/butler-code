@@ -1,0 +1,6 @@
+interface:
+  display_name: "Dogfood"
+  short_description: "按改动范围实际试用 Web、CLI 和桌面应用，交付复现证据与未测项"
+  default_prompt: "用 $dogfood 验收本次改动涉及的真实用户流程，记录复现证据、失败和未测项。"
+policy:
+  allow_implicit_invocation: true

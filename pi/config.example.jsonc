@@ -1,0 +1,125 @@
+{
+	// 复制到 <Pi Agent 目录>/extensions/butler-ui/config.jsonc，重启 Pi 生效。
+	// 模型一律写 "provider/model/thinking"（model 本身可以带斜杠，如 openrouter/anthropic/claude-sonnet-5-5/high）。
+	// 下面用的是 /login 登录 Claude 和 ChatGPT 订阅后的模型名；换成你已登录的供应商与模型。
+	"features": {
+		"header": true,
+		"statusbar": true,
+		"tools": true,
+		"rename": true,
+		"claudeSub": false,
+		"openaiNative": true,
+		// 用户消息：左边一道蓝竖条、不填底色；false 恢复 Pi 原来整行铺满蓝底的样子
+		"userMessage": true,
+		// 链接和路径后面紧跟中文标点时补一个空格，免得终端把标点和后面的字也算进链接、点开是错的；false 关掉
+		"links": true,
+		"review": true,
+		"master": true
+	},
+
+	"openai": {
+		"nativeCompaction": true,
+		"providers": {
+			"xai": {
+				"priority": true
+			}
+		}
+	},
+
+	// 折叠态每轮最多显示几条中间回复（各一行首句），更早的折成“+N 条”；0 = 只留最后一条回复。
+	"tools": {
+		"replyLines": 3
+	},
+
+	// 对抗审查：reviewers 各自独立审查，连续 advisorAfterFailures 轮不过时由 advisor 仲裁。
+	"review": {
+		"advisor": "anthropic/claude-opus-5-5/high",
+		"reviewers": ["anthropic/claude-opus-5-5/medium", "openai-codex/gpt-6.1-sol/high"],
+		"maxRounds": 5,
+		"advisorAfterFailures": 2,
+		"timeoutMinutes": 40,
+		"tools": ["read", "grep", "find", "ls", "bash"],
+		"language": "zh"
+	},
+
+	// 指挥官：新会话默认激活；子代理按角色选模型，主模型失败时依次换 fallback。
+	"master": {
+		"autoActivate": true,
+		"workerExcludeExtensions": [],
+		"roles": {
+			"调研员": {
+				"model": "openai-codex/gpt-6-luna/high",
+				"use": "只读不改：大量搜索、读日志、读代码找问题、核对资料",
+				"fallback": ["anthropic/claude-sonnet-5-5/medium"]
+			},
+			"工程师": {
+				"model": "anthropic/claude-sonnet-5-5/high",
+				"use": "要改代码：实现、调试",
+				"fallback": ["openai-codex/gpt-6.1-sol/high"]
+			},
+			"杂活": {
+				"model": "anthropic/claude-haiku-5-5/low",
+				"use": "小而快：查一个事实、改几行、跑一条命令",
+				"fallback": ["openai-codex/gpt-6-luna/low"]
+			}
+		}
+	},
+
+	// 后台能力（agents/）：哨兵、调研、选择题、预测输入、未了事项、纠错本；没有这一节就全部关闭。
+	"agents": {
+		// 配置写错的功能拒绝启动并在会话开始时警告，不会回退成别的模型。
+		"features": {
+			"sentinel": true,
+			"research": false,
+			"predict": false,
+			"choose": true,
+			"lessons": true,
+			"loose": true
+		},
+
+		// 哨兵（sentinel 工具）：盯任何东西（PR、CI、地址，或一条命令看得到的一切）直到有结果。notify 是通知命令（文本从标准输入传入），"pi" 表示只在 Pi 里提示。
+		// 想推到手机，把 notify 换成你自己的通知脚本，例如 ["/path/to/notify", "sentinel"]。
+		"sentinel": {
+			"model": "anthropic/claude-haiku-5-5/low",
+			"intervalSeconds": 60,
+			"notify": "pi"
+		},
+
+		// 调研（research 工具）：每次固定派 members 里的这几位（不同服务商、各用自己自带的网页搜索，来源互相独立）各自查同一个问题，再由 synthesizer 合并并交叉验证。
+		// 每次都是全部 members；写 1 到 5 个模型。请求走 OpenAI 兼容的 /chat/completions 并带 web_search_options，
+		// 所以 members 必须挂在支持它的网关上（如 OpenRouter）；Pi 内置的 Claude、ChatGPT 订阅登录不行，默认关着。
+		"research": {
+			"members": ["openrouter/anthropic/claude-sonnet-5-5/medium", "openrouter/openai/gpt-6.1-sol/medium", "openrouter/x-ai/grok-4.7/high"],
+			"synthesizer": "anthropic/claude-sonnet-5-5/high"
+		},
+
+		// 选择题：助手说完一段话、在等你做决定时，这个模型把它整理成 2 到 4 个选项，你按键选；Esc 关掉，或选“自己写…”。
+		// 先用不花钱的规则筛一遍，只有像在等你选择的才调用模型；你经常直接关掉它就自动降低频率。
+		"choose": {
+			"model": "anthropic/claude-haiku-5-5/low"
+		},
+
+		// 预测输入：每个回合结束后猜你下一句，灰色显示在输入框里，Tab 采用。每个回合多一次小模型调用，所以默认关着。
+		"predict": {
+			"model": "anthropic/claude-haiku-5-5/low",
+			"examples": 4
+		},
+
+		// loose：内置的“会话哨兵”（未了事项）。用户要求或我答应过、还没做完的事，记在对话之外（每个项目一份），压缩上下文也丢不了：
+		// 每次运行前放进系统提示，底栏显示数量，每轮结束和你离开很久回来时提醒；放太久（staleHours）交给 notify。
+		// 便宜的模型每隔 scanEveryTurns 轮、以及压缩上下文之前，翻一遍对话找漏掉的事，找到的先当“候选”，等你确认。
+		"loose": {
+			"model": "anthropic/claude-haiku-5-5/low",
+			"scanEveryTurns": 6,
+			"remindMinutes": 30,
+			"awayMinutes": 20,
+			"staleHours": 6,
+			"notify": "pi"
+		},
+
+		// lessons：纠错本（全局的和当前项目的）每次运行前自动放进系统提示，agent 不用被提醒；用户说“记到纠错本”有 lesson 工具来记。maxChars 是放进去的上限（2000 到 60000）。
+		"lessons": {
+			"maxChars": 12000
+		}
+	}
+}

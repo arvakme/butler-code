@@ -1,0 +1,6 @@
+interface:
+  display_name: "Delivery Verify"
+  short_description: "默认开发验证闭环，交付过程证据和离线 HTML，支持打回续做"
+  default_prompt: "用 $delivery-verify 完成当前交付的受影响验证，提供过程证据、最终效果和本轮离线报告。"
+policy:
+  allow_implicit_invocation: true
